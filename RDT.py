@@ -2,6 +2,7 @@ import Network
 import argparse
 from time import sleep
 import hashlib
+import time
 
 
 class Packet:
@@ -68,6 +69,7 @@ class RDT:
         self.sent_pck = Packet(0, 'hello')
         self.received_pck = Packet(0, 'hello')
         self.sent_seq_num = 1
+        self.got_ack = False
     
     def disconnect(self):
         self.network.disconnect()
@@ -142,6 +144,8 @@ class RDT:
 
                 # Send positive ACK
             except RuntimeError:
+                # Check with jordan what we should do if the ack is corrupt? Does it matter, right now I think a corrupt
+                # Ack defaults to resending the packet.
                 print('corrupt')
                 # Send negative ACK
                 self.network.udt_send(Packet(self.seq_num, 'ack msg', 1).get_byte_S())
@@ -149,11 +153,63 @@ class RDT:
                 return None
 
     
-    def rdt_3_0_send(self, msg_S):
-        pass
+    def rdt_3_0_send(self, msg_S, resend = False):
+        # start a time out to resend data if nothing ack has been received.
+        self.got_ack = False
+        p = Packet(self.seq_num, msg_S)
+
+        if not resend:
+            self.sent_seq_num = self.seq_num
+            self.seq_num += 1
+            self.sent_pck = p
+
+        self.network.udt_send(p.get_byte_S())
         
     def rdt_3_0_receive(self):
-        pass
+        ret_S = None
+        byte_S = self.network.udt_receive()
+        self.byte_buffer += byte_S
+        #keep extracting packets - if reordered, could get more than one
+        while True:
+            #check if we have received enough bytes
+            if(len(self.byte_buffer) < Packet.length_S_length):
+                return ret_S #not enough bytes to read packet length
+            #extract length of packet
+            length = int(self.byte_buffer[:Packet.length_S_length])
+            if len(self.byte_buffer) < length:
+                return ret_S #not enough bytes to read the whole packet
+            #create packet from buffer content and add to return string
+
+            try:
+                p = Packet.from_byte_S(self.byte_buffer[0:length])
+                if p.ack == 1:
+                    print('Received Ack')
+                    self.got_ack = True
+                    if p.seq_num < self.seq_num:
+                        print('need to resend')
+                        self.network.udt_send(self.sent_pck.get_byte_S())
+                    self.byte_buffer = self.byte_buffer[length:]
+                    return None
+                else:
+                    print('good packet')
+                    self.received_pck = p
+                    ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
+                    # remove the packet bytes from the buffer
+                    self.byte_buffer = self.byte_buffer[length:]
+                    # Send ack packet
+                    print('sending ack')
+                    self.network.udt_send(Packet(p.seq_num + 1, 'ack msg', 1).get_byte_S())
+                    # if this was the last packet, will return on the next iteration
+
+                # Send positive ACK
+            except RuntimeError:
+                # Check with jordan what we should do if the ack is corrupt? Does it matter, right now I think a corrupt
+                # Ack defaults to resending the packet.
+                print('corrupt')
+                # Send negative ACK
+                self.network.udt_send(Packet(self.seq_num, 'ack msg', 1).get_byte_S())
+                self.byte_buffer = self.byte_buffer[length:]
+                return None
         
 
 if __name__ == '__main__':
