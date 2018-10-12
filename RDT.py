@@ -104,8 +104,9 @@ class RDT:
 
     def rdt_2_1_send(self, msg_S):
         self.byte_buffer = ''
-        print("\nSending packet using RDT 2.1\n");
+        print("\nSending packet using RDT 2.1...")
         p = Packet(self.seq_num, msg_S)
+        self.last_msg = p
         self.seq_num += 1
 
         self.network.udt_send(p.get_byte_S())
@@ -120,23 +121,39 @@ class RDT:
             if len(self.byte_buffer) < length:
                 continue #not enough bytes to read the whole packet
             #create packet from buffer content and add to return string
+            print("...received a response...")
             try:
                 p_rec = Packet.from_byte_S(self.byte_buffer[0:length])
+                print("...response is not corrupt...")
                 if p_rec.ack == 1:
                     self.byte_buffer = self.byte_buffer[length:]
-                    # Positive Ack
-                    if p_rec.seq_num == 1:
+                    print("...response is an acknowledgement...")
+                    print("...expecting ACK if seq#=1...")
+                    if p_rec.seq_num == 1: # Positive Ack
+                        print("...response is an ACK w/ seq#=%s..." % p_rec.seq_num)
+                        print("...message received, ending send method.");
                         return
-                    else:
+                    else: # Nak
+                        print("...response is a NAK w/ seq#=%s..." % p_rec.seq_num)
+                        print("...resending our message.");
                         # Resend Message
                         self.network.udt_send(p.get_byte_S())
                 else: # Message
+                    print("...response is a message...");
+                    print("...if seq # less than %s, its already received..." % self.received_num)
                     if p_rec.seq_num <= self.received_num:
-
+                        print("...message has seq#=%s, so we have already received it..." % p_rec.seq_num);
+                        print("...removing from byte buffer and continuing send method...");
                         self.byte_buffer = self.byte_buffer[length:]
+                        ack = Packet(1, 'ack msg', 1)
+                        self.network.udt_send(ack.get_byte_S())
                     else:
+                        print("...message has seq#=%s, so we have not previously received it..." % p_rec.seq_num);
+                        print("...message is equivalent to ACK, ending send method.");
                         return
             except RuntimeError:
+                print("...response is corrupt...");
+                print("...resending our message.");
                 self.network.udt_send(p.get_byte_S())
                 self.byte_buffer = self.byte_buffer[length:]
 
@@ -161,8 +178,16 @@ class RDT:
                 p = Packet.from_byte_S(self.byte_buffer[0:length])
                 self.byte_buffer = self.byte_buffer[length:]
 
-                print('...recieved packet is a valid message w/ seq#=%s...' % p.seq_num);
+                if p.ack == 1:
+                    print('...receieved an ack...')
+                    if(p.seq_num == 1):
+                        print('...ack, ignore...')
+                    else:
+                        print('...nak, resend our last data')
+                        self.network.udt_send(self.last_msg.get_byte_S())
+                    return None
 
+                print('...recieved packet is a valid message w/ seq#=%s...' % p.seq_num);
                 if p.seq_num <= self.received_num:
                     print('..duplicate packet.. with seq # %s and latest seq # of %s' % (p.seq_num,self.received_num))
                     ack = Packet(1, 'ack msg', 1)
