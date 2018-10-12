@@ -124,9 +124,9 @@ class RDT:
             print("...received a response...")
             try:
                 p_rec = Packet.from_byte_S(self.byte_buffer[0:length])
+                self.byte_buffer = self.byte_buffer[length:]
                 print("...response is not corrupt...")
                 if p_rec.ack == 1:
-                    self.byte_buffer = self.byte_buffer[length:]
                     print("...response is an acknowledgement...")
                     print("...expecting ACK if seq#=1...")
                     if p_rec.seq_num == 1: # Positive Ack
@@ -144,13 +144,20 @@ class RDT:
                     if p_rec.seq_num <= self.received_num:
                         print("...message has seq#=%s, so we have already received it..." % p_rec.seq_num);
                         print("...removing from byte buffer and continuing send method...");
-                        self.byte_buffer = self.byte_buffer[length:]
                         ack = Packet(1, 'ack msg', 1)
                         self.network.udt_send(ack.get_byte_S())
                     else:
                         print("...message has seq#=%s, so we have not previously received it..." % p_rec.seq_num);
-                        print("...message is equivalent to ACK, ending send method.");
-                        return
+
+                        # POINT OF INTEREST
+                        # If we are recieving new messages, we can actually just want to
+                        # respond to them with NAKs, forcing the sender to keep sending us it.
+                        # The value of this is that we can essentially keep pushing back their
+                        # new messages until we finally get our original ACK we have been waiting
+                        # for. I think this solved all of our issues... 
+                        print("...refuse to recognize it by sending a NAK.");
+                        nak = Packet(0, 'ack msg', 1)
+                        self.network.udt_send(nak.get_byte_S())
             except RuntimeError:
                 print("...response is corrupt...");
                 print("...resending our message.");
