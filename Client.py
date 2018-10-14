@@ -29,10 +29,8 @@ if __name__ == '__main__':
         while msg_S == None:
             msg_S = rdt.rdt_3_0_receive()
             if msg_S is None:
-                if time_of_last_data + timeout < time.time():
-                    break
-                else:
-                    continue
+                continue
+                    
         time_of_last_data = time.time()
 
         #print the result
