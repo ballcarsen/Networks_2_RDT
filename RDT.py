@@ -263,8 +263,8 @@ class RDT:
                         # new messages until we finally get our original ACK we have been waiting
                         # for. I think this solved all of our issues...
                         print("...refuse to recognize it by sending a NAK.");
-                        nak = Packet(0, 'ack msg', 1)
-                        self.network.udt_send(nak.get_byte_S())
+                        #nak = Packet(0, 'ack msg', 1)
+                        self.network.udt_send(p.get_byte_S())
             except RuntimeError:
                 print('Received a corrupt packet, resending message')
                 sent_time = time.time()
