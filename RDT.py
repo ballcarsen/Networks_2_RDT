@@ -103,7 +103,6 @@ class RDT:
 
 
     def rdt_2_1_send(self, msg_S):
-        self.byte_buffer = ''
         print("\nSending packet using RDT 2.1")
         p = Packet(self.seq_num, msg_S)
         self.last_msg = p
