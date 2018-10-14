@@ -154,7 +154,7 @@ class RDT:
                         # respond to them with NAKs, forcing the sender to keep sending us it.
                         # The value of this is that we can essentially keep pushing back their
                         # new messages until we finally get our original ACK we have been waiting
-                        # for. I think this solved all of our issues... 
+                        # for. I think this solved all of our issues...
                         print("...refuse to recognize it by sending a NAK.");
                         nak = Packet(0, 'ack msg', 1)
                         self.network.udt_send(nak.get_byte_S())
@@ -233,7 +233,7 @@ class RDT:
         # keep extracting packets - if reordered, could get more than one
         while True:
             # Timeout: resend message
-            if sent_time + 2 < time.time():
+            if sent_time + .1 < time.time():
                 print('... timeout, resend message...')
                 sent_time = time.time()
                 self.network.udt_send(p.get_byte_S())
