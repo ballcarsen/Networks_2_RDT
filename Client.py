@@ -23,14 +23,18 @@ if __name__ == '__main__':
     rdt = RDT.RDT('client', args.server, args.port)
     for msg_S in msg_L:
         print('Converting: '+ msg_S)
-        rdt.rdt_3_0_send(msg_S)
+        print('\n\n----BEGIN SEND PROTOCOL----')
+        rdt.rdt_2_1_send(msg_S)
+        print('----END SEND PROTOCOL----\n')
         # try to receive message before timeout
+        print('\n----BEGIN RECEIVE PROTOCOL----')
         msg_S = None
         while msg_S == None:
-            msg_S = rdt.rdt_3_0_receive()
+            msg_S = rdt.rdt_2_1_receive()
             if msg_S is None:
                 continue
-                    
+        print('----END RECEIVE PROTOCOL----\n\n')
+
         time_of_last_data = time.time()
 
         #print the result
