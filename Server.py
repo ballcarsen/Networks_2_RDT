@@ -30,14 +30,14 @@ if __name__ == '__main__':
     parser.add_argument('port', help='Port.', type=int)
     args = parser.parse_args()
 
-    timeout = 2 #close connection if no new data within 5 seconds
+    timeout = 2000 #close connection if no new data within 5 seconds
     time_of_last_data = time.time()
 
     rdt = RDT.RDT('server', None, args.port)
     print('\n\n----BEGIN RECEIVE PROTOCOL----')
     while(True):
         #try to receiver message before timeout
-        msg_S = rdt.rdt_2_1_receive()
+        msg_S = rdt.rdt_3_0_receive()
 
         if msg_S is None:
             if time_of_last_data+timeout < time.time():
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         rep_msg_S = piglatinize(msg_S)
         print('Converted %s \nto \n%s\n' % (msg_S, rep_msg_S))
         print('\n----BEGIN SEND PROTOCOL')
-        rdt.rdt_2_1_send(rep_msg_S)
+        rdt.rdt_3_0_send(rep_msg_S)
         print('----END SEND PROTOCOL----\n')
         print('\n----BEGIN RECEIVE PROTOCOL----')
 

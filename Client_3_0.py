@@ -17,7 +17,7 @@ if __name__ == '__main__':
     output = open('output.txt', 'w')
 
 
-    timeout = 10 #send the next message if no response
+    timeout = 100 #send the next message if no response
     time_of_last_data = time.time()
 
     rdt = RDT.RDT('client', args.server, args.port)
@@ -30,7 +30,7 @@ if __name__ == '__main__':
             msg_S = rdt.rdt_3_0_receive()
             if msg_S is None:
                 if time_of_last_data + timeout < time.time():
-                    continue
+                    break
                 else:
                     continue
         time_of_last_data = time.time()

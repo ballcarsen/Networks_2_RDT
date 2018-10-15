@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
         if msg_S is None:
             if time_of_last_data + timeout < time.time():
-                continue
+                break
             else:
                 continue
         time_of_last_data = time.time()
@@ -52,6 +52,3 @@ if __name__ == '__main__':
         rdt.rdt_3_0_send(rep_msg_S)
 
     rdt.disconnect()
-
-
-

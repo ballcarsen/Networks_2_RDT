@@ -16,7 +16,7 @@ class Packet:
     def __init__(self, seq_num, msg_S, ack = 0):
         self.seq_num = seq_num
         self.msg_S = msg_S
-        self.ack = ack
+        self.ack = ack # 0=message, 1=ACK, 2=NAK
 
     @classmethod
     def from_byte_S(self, byte_S):
@@ -146,13 +146,6 @@ class RDT:
                         self.network.udt_send(ack.get_byte_S())
                     else:
                         print("Received a new message, not ready for it, sending NAK...")
-
-                        # POINT OF INTEREST
-                        # If we are recieving new messages, we can actually just want to
-                        # respond to them with NAKs, forcing the sender to keep sending us it.
-                        # The value of this is that we can essentially keep pushing back their
-                        # new messages until we finally get our original ACK we have been waiting
-                        # for. I think this solved all of our issues...
                         nak = Packet(p_rec.seq_num, 'ack msg', 2)
                         self.network.udt_send(nak.get_byte_S())
             except RuntimeError:
@@ -211,7 +204,6 @@ class RDT:
 
 
     def rdt_3_0_send(self, msg_S, resend = False):
-        self.byte_buffer = ''
         print("\nSending packet using RDT 3.0")
         p = Packet(self.seq_num, msg_S)
         self.last_msg = p
@@ -228,46 +220,40 @@ class RDT:
                 self.network.udt_send(p.get_byte_S())
                 continue
             self.byte_buffer += self.network.udt_receive()
-            # check if we have received enough bytes
-            if (len(self.byte_buffer) < Packet.length_S_length):
-                continue  # not enough bytes to read packet length
-            # extract length of packet
+            #check if we have received enough bytes
+            if(len(self.byte_buffer) < Packet.length_S_length):
+                continue #not enough bytes to read packet length
+            #extract length of packet
             length = int(self.byte_buffer[:Packet.length_S_length])
             if len(self.byte_buffer) < length:
-                continue  # not enough bytes to read the whole packet
-            # create packet from buffer content and add to return string
+                continue #not enough bytes to read the whole packet
+            #create packet from buffer content and add to return string
+
             try:
                 p_rec = Packet.from_byte_S(self.byte_buffer[0:length])
                 self.byte_buffer = self.byte_buffer[length:]
-                if p_rec.ack == 1:
-                    if p_rec.seq_num == 1:  # Positive Ack
-                        print('Received an ACK')
-                        return
-                    else:  # Nak
-                        print('Received a NAK')
-                        # Resend Message
-                        sent_time = time.time()
-                        self.network.udt_send(p.get_byte_S())
-                else:  # Message
 
+                if p_rec.ack == 1: # Positive Ack
+                    if p_rec.seq_num < p.seq_num:
+                        continue
+                    print("Received an ACK for our message, returning");
+                    return
+                elif p_rec.ack == 2: # Nak
+                    print("Received a NAK for our message, resending...")
+                    sent_time = time.time()
+                    # Resend Message
+                    self.network.udt_send(p.get_byte_S())
+                else: # Message
                     if p_rec.seq_num <= self.received_num:
-                        print('Received a duplicate message, resending ACK')
-                        ack = Packet(1, 'ack msg', 1)
+                        print("Received a duplicate message, sending ACK...")
+                        ack = Packet(p_rec.seq_num, 'ack msg', 1)
                         self.network.udt_send(ack.get_byte_S())
                     else:
-                        print('Received a new message while sending, sending NAK')
-
-                        # POINT OF INTEREST
-                        # If we are recieving new messages, we can actually just want to
-                        # respond to them with NAKs, forcing the sender to keep sending us it.
-                        # The value of this is that we can essentially keep pushing back their
-                        # new messages until we finally get our original ACK we have been waiting
-                        # for. I think this solved all of our issues...
-                        print("...refuse to recognize it by sending a NAK.");
-                        #nak = Packet(0, 'ack msg', 1)
-                        self.network.udt_send(p.get_byte_S())
+                        print("Received a new message, not ready for it, sending NAK...")
+                        nak = Packet(p_rec.seq_num, 'ack msg', 2)
+                        self.network.udt_send(nak.get_byte_S())
             except RuntimeError:
-                print('Received a corrupt packet, resending message')
+                print("Received a corrupt packet, resending...")
                 sent_time = time.time()
                 self.network.udt_send(p.get_byte_S())
                 self.byte_buffer = self.byte_buffer[length:]
@@ -276,55 +262,50 @@ class RDT:
         ret_S = None
         byte_S = self.network.udt_receive()
         self.byte_buffer += byte_S
-        # keep extracting packets - if reordered, could get more than one
+        #keep extracting packets - if reordered, could get more than one
         while True:
-            # check if we have received enough bytes
-            if (len(self.byte_buffer) < Packet.length_S_length):
-                return ret_S  # not enough bytes to read packet length
-            # extract length of packet
+            #check if we have received enough bytes
+            if(len(self.byte_buffer) < Packet.length_S_length):
+                return ret_S #not enough bytes to read packet length
+            #extract length of packet
             length = int(self.byte_buffer[:Packet.length_S_length])
             if len(self.byte_buffer) < length:
-                return ret_S  # not enough bytes to read the whole packet
-            # create packet from buffer content and add to return string
+                return ret_S #not enough bytes to read the whole packet
+            #create packet from buffer content and add to return string
 
-            print('\nRDT 3.0 has recieved a packet');
             # Not corrupt
             try:
+                print('Received a packet...')
                 p = Packet.from_byte_S(self.byte_buffer[0:length])
                 self.byte_buffer = self.byte_buffer[length:]
 
                 if p.ack == 1:
-                    if(p.seq_num == 1):
-                        print('Received an ACK, ignoring it (already a receiver)')
-                    else:
-                        print('Received a NAK, resending last message')
-                        self.network.udt_send(self.last_msg.get_byte_S())
-                    return None
-
-                if p.seq_num <= self.received_num:
-                    print('Received a duplicate message, resending ACK')
-                    ack = Packet(1, 'ack msg', 1)
+                    print('Received an ACK as receiver, just resend our message...')
+                    self.network.udt_send(self.last_msg.get_byte_S())
+                elif p.ack == 2:
+                    print('Received a NAK, resending last message...')
+                    self.network.udt_send(self.last_msg.get_byte_S())
+                elif p.seq_num <= self.received_num:
+                    print('Received a duplicate packet, resending ACK...')
+                    ack = Packet(p.seq_num, 'ack msg', 1)
                     self.network.udt_send(ack.get_byte_S())
-                    ret_S = None
                 else:
+                    print('Received a new non-corrupt message, sending ACK(!!!)')
                     self.received_num = p.seq_num
                     ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
                     # remove the packet bytes from the buffer
                     # Send ack packet
-                    print('Received a new message, sending ACK')
-                    ack = Packet(1, 'ack msg', 1)
+                    ack = Packet(p.seq_num, 'ack msg', 1)
                     self.network.udt_send(ack.get_byte_S())
                     # if this was the last packet, will return on the next iteration
-                    # Send positive ACK
+                # Send positive ACK
             except RuntimeError:
                 # Check with jordan what we should do if the ack is corrupt? Does it matter, right now I think a corrupt
                 # Ack defaults to resending the packet.
-                print('Received a corrupt packet, sending NAK')
-                nak = Packet(0, 'ack msg', 1)
+                print('Received packet is corrupt, sending a NAK...');
+                nak = Packet(-1, 'ack msg', 2)
                 self.network.udt_send(nak.get_byte_S())
                 self.byte_buffer = self.byte_buffer[length:]
-                return None
-
 
 if __name__ == '__main__':
     parser =  argparse.ArgumentParser(description='RDT implementation.')
